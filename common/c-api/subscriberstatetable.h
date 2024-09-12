@@ -14,8 +14,8 @@ typedef struct SWSSSubscriberStateTableOpaque *SWSSSubscriberStateTable;
 
 // Pass NULL for popBatchSize and/or pri to use the default values
 SWSSSubscriberStateTable SWSSSubscriberStateTable_new(SWSSDBConnector db, const char *tableName,
-                                                     const int32_t *popBatchSize,
-                                                     const int32_t *pri);
+                                                      const int32_t *popBatchSize,
+                                                      const int32_t *pri);
 
 void SWSSSubscriberStateTable_free(SWSSSubscriberStateTable tbl);
 

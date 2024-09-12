@@ -2,8 +2,8 @@
 #include <cstring>
 #include <deque>
 
-#include "../dbconnector.h"
 #include "../consumerstatetable.h"
+#include "../dbconnector.h"
 #include "../table.h"
 #include "consumerstatetable.h"
 #include "util.h"
@@ -12,8 +12,8 @@ using namespace swss;
 using namespace std;
 
 SWSSConsumerStateTable SWSSConsumerStateTable_new(SWSSDBConnector db, const char *tableName,
-                                                     const int32_t *p_popBatchSize,
-                                                     const int32_t *p_pri) {
+                                                  const int32_t *p_popBatchSize,
+                                                  const int32_t *p_pri) {
     int popBatchSize = p_popBatchSize ? static_cast<int>(*p_popBatchSize)
                                       : TableConsumable::DEFAULT_POP_BATCH_SIZE;
     int pri = p_pri ? static_cast<int>(*p_pri) : 0;
@@ -32,4 +32,3 @@ SWSSKeyOpFieldValuesArray SWSSConsumerStateTable_pops(SWSSConsumerStateTable tbl
         return makeKeyOpFieldValuesArray(vkco);
     });
 }
-
