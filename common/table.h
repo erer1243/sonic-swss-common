@@ -229,16 +229,16 @@ public:
                       const std::string &prefix = EMPTY_PREFIX);
     /* Read a value from the DB directly */
     /* Returns false if the key doesn't exists */
-    virtual bool get(const std::string &key, std::vector<FieldValueTuple> &ovalues);
+    virtual bool get(const std::string &key, std::vector<FieldValueTuple> &ovalues) override;
 
-    virtual bool hget(const std::string &key, const std::string &field,  std::string &value);
+    virtual bool hget(const std::string &key, const std::string &field,  std::string &value) override;
     virtual void hset(const std::string &key,
                           const std::string &field,
                           const std::string &value,
                           const std::string &op = "",
                           const std::string &prefix = EMPTY_PREFIX);
 
-    void getKeys(std::vector<std::string> &keys);
+    virtual void getKeys(std::vector<std::string> &keys) override;
 
     void setBuffered(bool buffered);
 
