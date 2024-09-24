@@ -1,6 +1,10 @@
+#include <boost/cast.hpp>
 #include <cstring>
 
+#include <iostream>
+
 #include "binaryserializer.h"
+#include "rediscommand.h"
 
 using namespace std;
 
@@ -14,16 +18,29 @@ template <class T> static inline void write_unaligned(char *buffer, T t) {
     std::memcpy(buffer, &t, sizeof(T));
 }
 
-class SerializerHelper {
+// A helper class that mainly provides .setKeyAndValue() to append a key-value pair to the buffer
+// it holds a pointer to. If it runs out of buffer space, it throws an error.
+class Serializer {
+  protected:
     char *m_buffer;
     size_t m_buffer_size;
     char *m_current_position;
     size_t m_kvp_count;
 
+    size_t serialized_data_len() {
+        return boost::numeric_cast<size_t>(m_current_position - m_buffer);
+    }
+
+    void reset() {
+        // Reserve space for m_kvp_count at the start of the buffer
+        m_current_position = m_buffer + sizeof(size_t);
+        m_kvp_count = 0;
+    }
+
   public:
-    SerializerHelper(char *buffer, size_t size)
-        : m_buffer(buffer), m_buffer_size(size), m_current_position(buffer + sizeof(size_t)),
-          m_kvp_count(0) {}
+    Serializer(char *buffer, size_t size) : m_buffer(buffer), m_buffer_size(size) {
+        reset();
+    }
 
     void setKeyAndValue(const char *key, size_t klen, const char *value, size_t vlen) {
         setData(key, klen);
@@ -39,32 +56,61 @@ class SerializerHelper {
         return static_cast<size_t>(m_current_position - m_buffer);
     }
 
-    void setData(const char *data, size_t datalen) {
-        if ((static_cast<size_t>(m_current_position - m_buffer) + datalen + sizeof(size_t)) >
-            m_buffer_size) {
+    void setData(const char *data, size_t dataLen) {
+        if (serialized_data_len() + dataLen + sizeof(size_t) > m_buffer_size) {
             SWSS_LOG_THROW("There is not enough buffer to serialize: current key count: %zu, "
                            "current data length: %zu, buffer size: %zu",
-                           m_kvp_count, datalen, m_buffer_size);
+                           m_kvp_count, dataLen, m_buffer_size);
         }
-        write_unaligned(m_current_position, datalen);
+
+        write_unaligned(m_current_position, dataLen);
         m_current_position += sizeof(size_t);
 
-        std::memcpy(m_current_position, data, datalen);
-        m_current_position += datalen;
+        std::memcpy(m_current_position, data, dataLen);
+        m_current_position += dataLen;
     }
 };
 
-namespace swss {
+// A helper class that adapts Serializer into using a vector for a buffer, which will automatically
+// grow as more buffer space is needed. reset() should be called before every use.
+class VectorSerializer : public Serializer {
+  protected:
+    vector<char> m_vec;
 
-size_t serializeBuffer(char *buffer, size_t size, const std::string &dbName,
-                       const std::string &tableName,
-                       const std::vector<swss::KeyOpFieldsValuesTuple> &kcos) {
+  public:
+    VectorSerializer() : Serializer(nullptr, 0) {
+        m_vec.reserve(4096);
+    }
 
-    auto tmpSerializer = SerializerHelper(buffer, size);
+    void reset() {
+        Serializer::reset();
+        resize(0);
+    }
 
+    const vector<char> &vec() {
+        return m_vec;
+    }
+
+    void resize(size_t neededSize) {
+        std::cout << neededSize << std::endl;
+        m_vec.resize(neededSize);
+        m_current_position = m_vec.data() + serialized_data_len();
+        m_buffer_size = m_vec.size();
+        m_buffer = m_vec.data();
+    }
+
+    void setData(const char *data, size_t dataLen) {
+        resize(serialized_data_len() + dataLen + sizeof(size_t));
+        Serializer::setData(data, dataLen);
+    }
+};
+
+template <class S>
+static size_t serializeBufferImpl(S &serializer, const string &dbName, const string &tableName,
+                                  const vector<swss::KeyOpFieldsValuesTuple> &kcos) {
     // Set the first pair as DB name and table name.
-    tmpSerializer.setKeyAndValue(dbName.c_str(), dbName.length(), tableName.c_str(),
-                                 tableName.length());
+    serializer.setKeyAndValue(dbName.c_str(), dbName.length(), tableName.c_str(),
+                              tableName.length());
     for (auto &kco : kcos) {
         auto &key = kfvKey(kco);
         auto &fvs = kfvFieldsValues(kco);
@@ -72,16 +118,32 @@ size_t serializeBuffer(char *buffer, size_t size, const std::string &dbName,
         // For each request, the first pair is the key and the number of attributes,
         // followed by the attribute pairs.
         // The operation is not set, when there is no attribute, it is a DEL request.
-        tmpSerializer.setKeyAndValue(key.c_str(), key.length(), fvs_len.c_str(), fvs_len.length());
+        serializer.setKeyAndValue(key.c_str(), key.length(), fvs_len.c_str(), fvs_len.length());
         for (auto &fv : fvs) {
             auto &field = fvField(fv);
             auto &value = fvValue(fv);
-            tmpSerializer.setKeyAndValue(field.c_str(), field.length(), value.c_str(),
-                                         value.length());
+            serializer.setKeyAndValue(field.c_str(), field.length(), value.c_str(), value.length());
         }
     }
 
-    return tmpSerializer.finalize();
+    return serializer.finalize();
+}
+
+namespace swss {
+
+const vector<char> &serializeBuffer(const string &dbName, const string &tableName,
+                                    const vector<swss::KeyOpFieldsValuesTuple> &kcos) {
+    static thread_local VectorSerializer globalSerializer;
+    globalSerializer.reset();
+    serializeBufferImpl(globalSerializer, dbName, tableName, kcos);
+    return globalSerializer.vec();
+}
+
+size_t serializeBuffer(char *buffer, size_t size, const std::string &dbName,
+                       const std::string &tableName,
+                       const std::vector<swss::KeyOpFieldsValuesTuple> &kcos) {
+    auto serializer = Serializer(buffer, size);
+    return serializeBufferImpl(serializer, dbName, tableName, kcos);
 }
 
 void deserializeBuffer(const char *buffer, size_t size,
@@ -146,7 +208,7 @@ void deserializeBuffer(const char *buffer, const size_t size, std::string &dbNam
             op = (fvs_size == 0) ? DEL_COMMAND : SET_COMMAND;
             fvs.clear();
         }
-        // This is an attribut pair.
+        // This is an attribute pair.
         else {
             fvs.push_back(fv);
             --fvs_size;
