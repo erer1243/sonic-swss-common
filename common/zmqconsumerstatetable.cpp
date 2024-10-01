@@ -66,16 +66,16 @@ void ZmqConsumerStateTable::handleReceivedData(const std::vector<std::shared_ptr
 /* Get multiple pop elements */
 void ZmqConsumerStateTable::pops(std::deque<KeyOpFieldsValuesTuple> &vkco, const std::string& /*prefix*/)
 {
-    vkco.clear();
-
-    std::lock_guard<std::mutex> lock(m_receivedQueueMutex);
-    size_t count = m_receivedOperationQueue.size();
-
-    for (size_t ie = 0; ie < count; ie++)
+    queue<shared_ptr<KeyOpFieldsValuesTuple>> q;
     {
-        auto& kco = *(m_receivedOperationQueue.front());
-        vkco.push_back(std::move(kco));
-        m_receivedOperationQueue.pop();
+        lock_guard<mutex> l(m_receivedQueueMutex);
+        swap(m_receivedOperationQueue, q);
+    }
+
+    vkco.clear();
+    while (!q.empty()) {
+        vkco.push_back(std::move(*q.front()));
+        q.pop();
     }
 }
 
