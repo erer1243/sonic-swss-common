@@ -12,7 +12,8 @@ class FunctionPointerMessageHandler : public ZmqMessageHandler {
 
     virtual void
     handleReceivedData(const std::vector<std::shared_ptr<KeyOpFieldsValuesTuple>> &kcos) override {
-        SWSSKeyOpFieldValuesArray arr = makeKeyOpFieldValuesArray(kcos);
+        auto kcos_copy(kcos);
+        SWSSKeyOpFieldValuesArray arr = makeKeyOpFieldValuesArray(move(kcos_copy));
         m_callback(m_data, &arr);
     }
 
