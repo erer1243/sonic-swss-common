@@ -68,6 +68,8 @@ void SWSSString_free(SWSSString s);
 
 const char *SWSSStrRef_c_str(SWSSStrRef s);
 
+// Returns the length of the string, not including the null terminator that is implicitly added by
+// SWSSStrRef_c_str.
 uint64_t SWSSStrRef_length(SWSSStrRef s);
 
 // arr.data may be null. This is not recursive - elements must be freed separately (for finer
@@ -110,7 +112,7 @@ extern bool cApiTestingDisableAbort;
 // undefined behavior. It was also decided that no exceptions in swss-common are recoverable, so
 // there is no reason to convert exceptions into a returnable type.
 #define SWSSTry(...)                                                                               \
-    if (cApiTestingDisableAbort) {                                                                 \
+    if (swss::cApiTestingDisableAbort) {                                                           \
         { __VA_ARGS__; }                                                                           \
     } else {                                                                                       \
         try {                                                                                      \

@@ -1,5 +1,7 @@
 #include "util.h"
 
+using namespace swss;
+
 bool swss::cApiTestingDisableAbort = false;
 
 SWSSString SWSSString_new(const char *data, uint64_t length) {
