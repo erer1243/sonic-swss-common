@@ -54,10 +54,10 @@ typedef enum {
     SWSSSelectResult_SIGNAL = 2,
 } SWSSSelectResult;
 
-// data should not include a null pointer
+// data should not include a null terminator
 SWSSString SWSSString_new(const char *data, uint64_t length);
 
-// c_str should include a null pointer
+// c_str should include a null terminator
 SWSSString SWSSString_new_c_str(const char *c_str);
 
 // It is safe to pass null to this function (not to any other SWSSString functions). This is
